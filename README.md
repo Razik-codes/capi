@@ -1,195 +1,177 @@
-# CAPI: Cluster and Predict Latents Patches for Improved Masked Image Modeling
-[[`ArXiv`](https://arxiv.org/abs/2502.08769)] [[`BibTeX`](#citing-capi)]
+# CAPI: Reproducibility Notes and Validation Tools
 
-**[Meta AI Research, FAIR](https://ai.facebook.com/research/)**
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-[Timothée Darcet](https://x.com/TimDarcet),
-[Federico Baldassare](https://x.com/BaldassarreFe),
-Maxime Oquab,
-Julien Mairal,
-Piotr Bojanowski
+This fork of **CAPI (Cluster and Predict Latent Patches)** adds a few tools I
+use to check a research environment, validate pretrained-model inference, and
+record what was run. CAPI is a masked-image-modeling method from Meta FAIR.
 
-PyTorch implementation and pretrained models for CAPI. For details, see [**Cluster and Predict Latents Patches for Improved Masked Image Modeling**](https://arxiv.org/abs/2502.08769). This repository contains the code and models to reproduce the paper.
+> **Attribution.** The CAPI method, model implementation, pretrained weights,
+> figures, and published results are the work of Darcet et al. This repository
+> is based on [`facebookresearch/capi`](https://github.com/facebookresearch/capi)
+> and does not claim authorship of the original research. See
+> [Project scope](docs/PROJECT_SCOPE.md) for a precise separation of
+> upstream work and changes in this fork.
 
-![CAPI diagram](imgs/poule_fig.png)
+## Status
 
-## Pretrained models
-| arch     | #params | FLOP/fwd @224 | Pretraining dataset | k-nn ADE20K | attentive IN1k | weights |
-|----------|---------|---------------|---------------------|-------------|----------------|---------|
-| ViT-L/14 | 302M    |      1.70E+11 | Places205           |        35.2 |           79.2 | [weights](https://dl.fbaipublicfiles.com/capi/capi_vitl14_p205.pth)   |
-| ViT-L/14 | 302M    |      1.70E+11 | LVD-142M            |        32.1 |           83.8 | [weights](https://dl.fbaipublicfiles.com/capi/capi_vitl14_lvd.pth)   |
-| ViT-L/14 | 302M    |      1.70E+11 | IN22k               |        29.7 |           83.6 | [weights](https://dl.fbaipublicfiles.com/capi/capi_vitl14_i22k.pth)   |
-| ViT-L/14 | 302M    |      1.70E+11 | IN1k                |        29.2 |           82.9 | [weights](https://dl.fbaipublicfiles.com/capi/capi_vitl14_in1k.pth)   |
+I have not reproduced full CAPI training or the paper-scale evaluations. My
+laptop GPU has **4 GB VRAM**, so it cannot reliably run ViT-L/14 evaluation and
+is far below the multi-GPU setup required for pretraining. The benchmark values
+below are reported by the original CAPI authors, not measured in this fork.
 
-### Pretrained models on PyTorch Hub
+The additions here are small engineering changes: an environment report, a
+pretrained-inference check that writes JSON, CPU-safe tests, CI, and notes on
+what can and cannot be validated on this machine.
+
+## Research context
+
+CAPI trains an image encoder by clustering latent patch representations and
+predicting their cluster assignments from masked views. The original study asks
+whether discrete targets learned online can improve masked image modeling
+without a separately trained tokenizer.
+
+- Paper: [Cluster and Predict Latent Patches for Improved Masked Image Modeling](https://arxiv.org/abs/2502.08769)
+- Official code: [facebookresearch/capi](https://github.com/facebookresearch/capi)
+- What changed in this fork: [docs/PROJECT_SCOPE.md](docs/PROJECT_SCOPE.md)
+- Reproduction protocol: [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md)
+
+![CAPI architecture from the original project](imgs/poule_fig.png)
+
+## Changes in this fork
+
+- a committed `uv.lock` for the reference environment;
+- checks that can run without CUDA, datasets, or checkpoint downloads;
+- a JSON report for a pretrained-model inference check;
+- GitHub Actions for the lightweight checks;
+- notes on the original code, local limitations, and next validation steps.
+
+I will add local benchmark numbers only alongside the command, environment, and
+saved output from the run.
+
+## Quick start
+
+Run the checks that do not need CUDA, datasets, pretrained weights, or project
+dependencies:
+
+```bash
+python -m unittest discover -s tests
+python -m py_compile scripts/check_environment.py scripts/validate_pretrained.py
+```
+
+Create the reference project environment:
+
+```bash
+uv sync
+uv run python scripts/check_environment.py --json artifacts/environment.json
+```
+
+The reference environment targets Python 3.11.9, PyTorch 2.5.1, CUDA 12.1, and
+Linux. A CUDA-capable machine with substantially more than 4 GB VRAM is
+recommended; the pretrained ViT-L/14 model has 302M parameters.
+
+Validate a pretrained model and save a JSON report:
+
+```bash
+uv run python scripts/validate_pretrained.py \
+  --model capi_vitl14_in1k \
+  --device cuda \
+  --output artifacts/capi_vitl14_in1k_cuda.json
+```
+
+The command exits non-zero if CUDA, weight download, loading, inference, shape
+capture, or finite-value validation fails. It never converts an offline or
+out-of-memory failure into a passing result.
+
+## Pretrained checkpoints
+
+These numbers are reported by the original CAPI authors; they are not results
+from this fork.
+
+| Architecture | Parameters | Pretraining data | ADE20K k-NN | ImageNet-1k attentive | Weights |
+|---|---:|---|---:|---:|---|
+| ViT-L/14 | 302M | Places205 | 35.2 | 79.2 | [checkpoint](https://dl.fbaipublicfiles.com/capi/capi_vitl14_p205.pth) |
+| ViT-L/14 | 302M | LVD-142M | 32.1 | 83.8 | [checkpoint](https://dl.fbaipublicfiles.com/capi/capi_vitl14_lvd.pth) |
+| ViT-L/14 | 302M | ImageNet-22k | 29.7 | 83.6 | [checkpoint](https://dl.fbaipublicfiles.com/capi/capi_vitl14_i22k.pth) |
+| ViT-L/14 | 302M | ImageNet-1k | 29.2 | 82.9 | [checkpoint](https://dl.fbaipublicfiles.com/capi/capi_vitl14_in1k.pth) |
+
+Minimal feature extraction:
+
 ```python
 import torch
 
-capi_vitl14_p205 = torch.hub.load('facebookresearch/capi:main', 'capi_vitl14_p205')
-capi_vitl14_lvd = torch.hub.load('facebookresearch/capi:main', 'capi_vitl14_lvd')
-capi_vitl14_in22k = torch.hub.load('facebookresearch/capi:main', 'capi_vitl14_in22k')
-capi_vitl14_in1k = torch.hub.load('facebookresearch/capi:main', 'capi_vitl14_in1k')
+model = torch.hub.load("facebookresearch/capi:main", "capi_vitl14_in1k")
+model.eval()
 
-# Simply call the models to encode an image
-img = torch.zeros(1, 3, 224, 224)  # example img, replace with your stuff
-global_repr, registers, feature_map = capi_vitl14_p205(img)
-
+images = torch.zeros(1, 3, 224, 224)
+with torch.inference_mode():
+    global_repr, registers, feature_map = model(images)
 ```
 
-## Documentation
+## Training and evaluation
 
-### Environment
+The default configuration reproduces the original ViT-L/14 setup. It is a
+large-scale distributed experiment, not a laptop-sized tutorial.
 
-The environment to run the code should be straightforward to create using [`uv`](https://github.com/astral-sh/uv). If you don't have it, you can install it using
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-Once it is installed, you can create your environment using 
-```bash
-uv venv
-uv sync
-```
+# Direct training
+uv run python train_capi.py default_pretrain_config.yaml \
+  train.output_dir=/path/to/output
 
-This environment can be activated using `. .venv/bin/activate`, and deactivated using `deactivate`. For convenience, you can also run python scripts using the environment without activating it using `uv run script.py`.
+# Slurm launcher (four nodes by default)
+uv run python train_distributed.py default_pretrain_config.yaml \
+  train.output_dir=/path/to/output
 
-If you prefer not using `uv`, you can create an env and install packages any other way (conda, virtualenv etc). The code will of course work with any environment matching the requirements in `pyproject.toml`.
-
-### Pretraining
-The training script is `train_capi.py`. It can be directly be invoked with a config path and optional command-line arguments:
-```bash
-python train_capi.py <config>.yaml [cfg_key1.cfg_key2=value] [cfg_key3=other_value] ...
-```
-To launch a distributed training on a Slurm cluster, you can use `train_distributed.py` with the same syntax, eg:
-```bash
-python train_distributed.py default_pretrain_config.yaml train.output_dir=/path/to/whatev
-```
-If you have a non-slurm cluster, you're on your own.
-
-The default config reproduces CAPI ViT-L/14.
-
-### Evaluation
-To evaluate CAPI in one line, run:
-```bash
-python benchmark.py model_loader_kwargs.config_path=default_pretrain_config.yaml pretrained_weights=/path/to/weights.pth
+# Evaluation suite
+uv run python benchmark.py \
+  model_loader_kwargs.config_path=default_pretrain_config.yaml \
+  pretrained_weights=/path/to/checkpoint.pth
 ```
 
-The evaluations scripts are the python files starting with `eval_`, and they are runnable as is:
-```bash
-python eval_segmentation.py model_path=... model_loader_kwargs=... train_dataset_name=... test_dataset_name=...
-```
-The arguments given to evaluation scripts are `model_path`, `model_loader_kwargs` and eval-specific arguments passed to the specific `eval_model` function.
+Dataset identifiers use URL-like syntax. Examples include
+`custom://ADE20K?split='training'`,
+`torchvision://ImageFolder?root='/path/to/imagenet/train'`, and Hugging Face
+datasets such as `hf://timm/imagenet-22k-wds?...`. Some datasets require prior
+acceptance of their terms and an access token.
 
-The evaluations include a visualisation script, if you run them you will get this sort of pretty pictures:
-![pretty dictlearning](imgs/capi_lvd_dictlearning_896_kalymnos.png)
-![pretty PCA](imgs/capi_lvd_pca_1792_capri.png)
-The script can only provide you with the colored visualizations, not the leftmost image. The trips are on your own budget.
+## Repository map
 
-### Baselines
-All baselines considered in the paper are loadable using the files in `baselines/`. Eg:
-```bash
-python eval_segmentation.py model_path=baselines/data2vec2_loader.py model_loader_kwargs.model_name=data2vec2_vitb16
-```
+| Path | Purpose |
+|---|---|
+| `model.py` | Vision Transformer, decoder, clustering head, and model loader |
+| `train_capi.py` | CAPI training loop |
+| `data.py` | Datasets, augmentation, and masking |
+| `eval_classification.py` | Linear and attentive classification evaluation |
+| `eval_segmentation.py` | k-NN and logistic-regression segmentation evaluation |
+| `eval_visualizations.py` | PCA and dictionary-learning feature visualizations |
+| `fsdp.py` | SimpleFSDP implementation used for distributed training |
+| `scripts/check_environment.py` | Environment and hardware provenance report |
+| `scripts/validate_pretrained.py` | Pretrained checkpoint inference validation |
+| `tests/` | Fast repository-contract checks used in CI |
+| `.github/workflows/quality.yml` | CPU-only GitHub Actions checks |
 
-### Launching multiple evaluations
-To facilitate launching multiple evaluations, `benchmark.py` provides a singl entry point. It takes a configuration argument to know which evals to launch, the default is `default_eval_config.py`.
+## Limitations
 
-## Datasets
-The codebase supports a few data sources, and will download what it can automatically, but you may need to do some manual work.
+- Full pretraining requires a multi-GPU or multi-node setup.
+- Local full-scale experiments have not yet been run because the available GPU
+  has 4 GB VRAM.
+- The reference dependencies are CUDA-specific and primarily tested on Linux.
+- Dataset licenses and authentication are not automated.
+- CI checks repository contracts and added tooling; it does not claim to
+  reproduce large-scale paper results on a hosted runner.
 
-The automatic downloads will be put in your cache folder: usually in `~/.cache/torch` and `~/.cache/huggingface`. If you prefer them to be saved somewhere else, the best option is to symlink thos folder to other locations.
+## Contributing and citation
 
-The available data sources are `torchvision`, `hf` and `custom`. The syntax to specify a dataset is a URL syntax, with optional keyword arguments to be passed to the dataset: `data_source://dataset?key1=value1&key2=value2`. See below for examples.
+See [CONTRIBUTING.md](CONTRIBUTING.md). When using the method, implementation,
+or weights, cite the original paper:
 
-### ImageNet-1k
-
-You need to log in to download the data [here](https://imagenet.stanford.edu/), then use it with the torchvision ImageFolder loader:
-```
-data.dataset=torchvision://ImageFolder?root='/path/to/imagenet/train'
-```
-
-### ImageNet-22k
-Can be streamed from huggingface with
-```
-data.dataset=hf://timm/imagenet-22k-wds?streaming=True&split='train'&img_field='jpg'
-```
-See "Huggingface datasets" for authentication details.
-
-### ADE20K
-Ready-to-use, will download the data if needed and cache it 
-```
-data.dataset=custom://ADE20K?split='training'
-```
-
-### Huggingface datasets
-Some datasets need a HuggingFace token to be accessed.
-
-To get that, go to https://huggingface.co/settings/tokens, "create new token", select read access, create the token then copy-paste it into `~/.cache/huggingface/token`.
-
-Some datasets require you to accept terms of use before downloading: eg, for imagenet go to https://huggingface.co/datasets/ILSVRC/imagenet-1k and accept the things.
-
-### Experimental
-There is experimental support for VOC, IN22k, iNaturalist21, SUN397 and Places365. However, no guarantee is given on those.
-
-## Codebase structure
-Flat.
-Main files to read:
-
-- `train_capi.py`: Your main entrypoint, it contains the whole training loop with the bulk of the CAPI logic.
-- `model.py`: A pretty standard vit implementation, as well as the code of the clustering head and model loading.
-- `data.py`: Dataset, augmentations...
-- `train_distributed.py`: Slurm distributed training logic.
-
-Check the other files only when you need a specific info. Here is a map:
-- `eval_visualizations.py`: Generate PCA visualisations of feature maps.
-- `eval_segmentation.py`: [k-NN and logistic regression segmentation evals](https://creativereview.imgix.net/content/uploads/2012/02/ronseal_frame_b_01.jpg).
-- `eval_classification.py`: [Linear and attentive classification evals](https://creativereview.imgix.net/content/uploads/2012/02/ronseal_frame_b_01.jpg).
-- `benchmark.py`: A launcher to send multiple evals of the same model to a Slurm cluster.
-- `utils.py`: 754 LOC. Miscellaneous functions, often their name should be self-explanatory and you should not have to look at their code. When it's not, well. Time to dive in.
-- `fsdp.py`: 547 LOC. Implementation of [SimpleFSDP](https://arxiv.org/abs/2411.00284). Don't think about it.
-- `hubconf.py`: The entrypoint for `torch.hub.load`.
-- `pyproject.toml`: Dependencies, linting config, etc.
-- `README.md`: You are here.
-
-
-## Efficiency
-The codebase should be pretty efficient. A few features:
-- almost entirely cpu/gpu asynchronous, with a single sync point every 20 iter to print the loss
-- fully torch.compile-able
-- efficient overlapped FSDP (implementation in fsdp.py)
-- overlapped cpu-to-gpu data transfer
-- selective activation rematerialization (ie checkpointing), with customizable strategy
-
-The codebase is optimized for relatively big models, ie ViT-L and above. It reaches its best efficiency at the 3B model size with about 58% MFU on 16 nodes of 8 A100. It's possible to train bigger with activation checkpointing, but it's not yet battle-tested.
-
-If you need to optimize for your specific workloads:
-- profile, profile, and profile again a bit more (use `train.profiling=true`)
-- tweak the torch.compile args (eg with small models you may want to use cudagraphs\*)
-- tweak the selective activation checkpointing strategy: you can trade memory for interconnect by checkpointing the `all_gather` ops, and you can trade for compute by checkpointing the matmuls or the flashattention.
-- Optimize SM utilisation. You can try optimizing the shapes, or removing some ops that might be inefficient etc... We did not go there yet.
-
-\* cudagraphs are not working right now, monitor this issue for more info: https://github.com/pytorch/pytorch/issues/130123
-
-
-## Acknowledgements
-Code built using the DINOv2 codebase. We thank Francisco Massa for the FSDP implementation. We also thank the countless and nameless contributors who built thousands of small snippets and tricks that ended up in this codebase.
-
-## License
-
-CAPI code and model weights are released under the Apache License 2.0. See [LICENSE](LICENSE) for additional details.
-
-## Contributing
-
-See [contributing](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
-
-## Citing CAPI
-
-If you find this repository useful, please consider giving a star :star: and citation [:t-rex:](wrong_animal):
-
-```
+```bibtex
 @article{darcet2025capi,
-  title   = {Cluster and Predict Latents Patches for Improved Masked Image Modeling},
+  title   = {Cluster and Predict Latent Patches for Improved Masked Image Modeling},
   author  = {Darcet, Timoth{\'e}e and Baldassarre, Federico and Oquab, Maxime and Mairal, Julien and Bojanowski, Piotr},
-  journal = {arXiv},
+  journal = {arXiv preprint arXiv:2502.08769},
   year    = {2025}
 }
 ```
+
+The code and model weights remain under the [Apache License 2.0](LICENSE).

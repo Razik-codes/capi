@@ -1,31 +1,41 @@
-# Contributing to capi
-We want to make contributing to this project as easy and transparent as
-possible.
+# Contributing
 
-## Pull Requests
-We actively welcome your pull requests.
+Contributions that improve reproducibility, correctness, documentation, or
+evaluation coverage are welcome.
 
-1. Fork the repo and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes.
-5. Make sure your code lints.
-6. If you haven't already, complete the Contributor License Agreement ("CLA").
+## Development setup
 
-## Contributor License Agreement ("CLA")
-In order to accept your pull request, we need you to submit a CLA. You only need
-to do this once to work on any of Facebook's open source projects.
+Fast checks for public repository structure and validation-script syntax:
 
-Complete your CLA here: <https://code.facebook.com/cla>
+```bash
+python -m unittest discover -s tests
+python -m py_compile scripts/check_environment.py scripts/validate_pretrained.py
+```
 
-## Issues
-We use GitHub issues to track public bugs. Please ensure your description is
-clear and has sufficient instructions to be able to reproduce the issue.
+Project-environment checks after installing the CUDA-oriented dependencies:
 
-Meta has a [bounty program](https://www.facebook.com/whitehat/) for the safe
-disclosure of security bugs. In those cases, please go through the process
-outlined on that page and do not file a public issue.
+```bash
+uv sync
+uv run python scripts/check_environment.py --json artifacts/environment.json
+```
 
-## License
-By contributing to capi, you agree that your contributions will be licensed
-under the LICENSE file in the root directory of this source tree.
+The dependencies are CUDA-oriented. Fast repository tests deliberately avoid
+model downloads, datasets, project imports, and GPU requirements; expensive
+checks belong in a documented experiment command and should save output under
+`artifacts/`.
+
+## Pull requests
+
+1. Create a focused branch from `main`.
+2. Explain the research or engineering motivation.
+3. Add or update tests for behavior that can be checked automatically.
+4. Record the exact command and hardware for GPU-dependent validation.
+5. Run the relevant checks and update documentation when interfaces change.
+6. Keep upstream work and original contributions clearly attributed.
+
+Do not commit datasets, checkpoints, access tokens, generated caches, or
+personally identifying experiment paths.
+
+Open issues with a minimal example, OS, Python and PyTorch versions,
+accelerator model, command, and complete error. By contributing, you agree that
+your contribution is licensed under Apache License 2.0.

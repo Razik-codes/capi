@@ -26,6 +26,8 @@ dist/
 # testing outputs
 exp_cfg.yaml
 logs/log.txt
+artifacts/
+.pytest_cache/
 
 # misc
 datasets
